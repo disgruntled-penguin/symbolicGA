@@ -55,6 +55,9 @@ class Individual:
         with np.errstate(divide='ignore', invalid='ignore'): 
             z_grid = self.func(xx, yy)
         
+        if not isinstance(z_grid, np.ndarray) or z_grid.ndim == 0: #return only 2D array
+            z_grid = np.full_like(xx, z_grid, dtype=np.float64)
+
         if np.iscomplexobj(z_grid):
             z_grid = np.real(z_grid) #only considers real part of complex
             
@@ -74,6 +77,7 @@ class Individual:
 if __name__ == "__main__":
 
     ind = Individual(max_depth=5)
-    ind.render_image(filename="test.png", grid_size=500)
+    filename=f'{ind.expression}.png'
+    ind.render_image(filename, grid_size=500)
     
     print(f"Generated expression: {ind.expression}")
