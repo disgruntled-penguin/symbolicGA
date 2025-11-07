@@ -1,1 +1,1 @@
-exploring generative art and genetic algorithms by evolving and mutating basic mathematical functions. The fitness of the population is defined by the mathematical expressions which produce more visual complexity and/or patterns
+generative art by evolving and mutating basic mathematical functions. The fitness of the population is defined by the mathematical expressions which produce more visual complexity and/or patterns.
