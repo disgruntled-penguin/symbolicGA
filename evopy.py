@@ -37,7 +37,11 @@ OPERATORS = [
     (sympy.tanh, 1),  
     (sympy.Abs, 1),   
     (safe_mod, 2), 
-    (sympy.atan2, 2), 
+    #(safe_mod, 2), more girds
+   # (safe_mod, 2),
+   # (sympy.atan2, 2), more waves
+   # (sympy.atan2, 2),
+    (sympy.atan2, 2),
     (safe_pow, 2),    
     (sympy.sqrt, 1),  
     #(sympy.re, 1),    
@@ -61,7 +65,8 @@ class Individual:
     def mk_rand_exp(self, depth): # make random expression
         if depth >= self.max_depth:
             return random.choice(TERMINALS)
-
+        
+       #prob_operator = 0.95 - (depth * 0.1) - saved in f_results
         if random.random() < 0.7: # 0.7 to pick an operator/grow the tree
             op, arity = random.choice(OPERATORS)
             args = [self.mk_rand_exp(depth + 1) for _ in range(arity)]
@@ -107,7 +112,7 @@ class Individual:
 
     def render_image(self, filename="output.png", grid_size=300, expr_r_str="", expr_g_str="", expr_b_str=""):
         rgb_image = self.evaluate(grid_size)
-        fig, ax = plt.subplots(figsize=(10, 12)) 
+        fig, ax = plt.subplots(figsize=(7, 7)) 
         ax.imshow(rgb_image, origin='lower')
         ax.axis('off') 
         wrapped_expr_r = textwrap.fill(expr_r_str, width=410)
@@ -279,7 +284,7 @@ if __name__ == "__main__":
             warnings.simplefilter("ignore")
             pop.evolve()
         best_ind = pop.best_individual()
-        filename = f"results/rgb_{best_ind.expression_r}.png"
+        filename = f"f_results/rgb_{best_ind.expression_r}.png"
         try:
             best_ind.render_image(
                 filename=filename, 
