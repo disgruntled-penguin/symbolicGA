@@ -243,7 +243,7 @@ if __name__ == "__main__":
     for i in range(NUM_GENERATIONS):
         pop.evolve()
         best_ind = pop.best_individual()
-        filename = f"results/generation_{str(i).zfill(3)}.png"
+        filename = f"results/rgb_{best_ind.expression_r}.png"
         best_ind.render_image(filename=filename, grid_size=500)
         
         print(f" gen{i} - fitness/expression: {best_ind.fitness:.4f}/{best_ind.expression_r}")
