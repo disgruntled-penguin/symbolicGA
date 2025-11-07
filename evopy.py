@@ -5,6 +5,7 @@ from sympy.utilities.lambdify import lambdify
 import matplotlib.pyplot as plt
 import textwrap
 import warnings
+import re
 
 #genetic bb
 x, y, r, theta = sympy.symbols('x y r theta')
@@ -107,7 +108,7 @@ class Individual:
 
     def render_image(self, filename="output.png", grid_size=300, expr_r_str="", expr_g_str="", expr_b_str=""):
         rgb_image = self.evaluate(grid_size)
-        fig, ax = plt.subplots(figsize=(10, 12)) 
+        fig, ax = plt.subplots(figsize=(7,7)) 
         ax.imshow(rgb_image, origin='lower')
         ax.axis('off') 
         wrapped_expr_r = textwrap.fill(expr_r_str, width=410)
@@ -279,7 +280,12 @@ if __name__ == "__main__":
             warnings.simplefilter("ignore")
             pop.evolve()
         best_ind = pop.best_individual()
-        filename = f"results/rgb_{best_ind.expression_r}.png"
+        expr_str = str(best_ind.expression_r)
+        safe_expr = re.sub(r'[<>:"/\\|?*\(\)\s]', '', expr_str)
+        safe_expr = safe_expr[:100]
+    
+        filename = f"o_results/gen{i}_{safe_expr}.png"
+        
         try:
             best_ind.render_image(
                 filename=filename, 
@@ -290,6 +296,11 @@ if __name__ == "__main__":
             )
         except Exception as e:
             print(e)
+            fallback = f"o_results/gen{i}_fallback.png"
+            best_ind.render_image(filename=fallback, grid_size=500, 
+                                expr_r_str=str(best_ind.expression_r),
+                                expr_g_str=str(best_ind.expression_g),
+                                expr_b_str=str(best_ind.expression_b))
 
         print(f" gen{i} - fitness/expression: {best_ind.fitness:.4f}/{best_ind.expression_r}")
 
