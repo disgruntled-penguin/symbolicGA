@@ -37,10 +37,10 @@ OPERATORS = [
     (sympy.tanh, 1),  
     (sympy.Abs, 1),   
     (safe_mod, 2), 
-    (safe_mod, 2),
-    (safe_mod, 2),
-    (sympy.atan2, 2), 
-    (sympy.atan2, 2),
+    #(safe_mod, 2), more girds
+   # (safe_mod, 2),
+   # (sympy.atan2, 2), more waves
+   # (sympy.atan2, 2),
     (sympy.atan2, 2),
     (safe_pow, 2),    
     (sympy.sqrt, 1),  
