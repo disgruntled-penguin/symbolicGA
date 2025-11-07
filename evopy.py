@@ -285,7 +285,12 @@ if __name__ == "__main__":
             warnings.simplefilter("ignore")
             pop.evolve()
         best_ind = pop.best_individual()
-        filename = f"results/rgb_{best_ind.expression_r}.png"
+        expr_str = str(best_ind.expression_r)
+        safe_expr = re.sub(r'[<>:"/\\|?*\(\)\s]', '', expr_str)
+        safe_expr = safe_expr[:100]
+    
+        filename = f"o_results/gen{i}_{safe_expr}.png"
+        
         try:
             best_ind.render_image(
                 filename=filename, 
@@ -302,5 +307,6 @@ if __name__ == "__main__":
                                 expr_g_str=str(best_ind.expression_g),
                                 expr_b_str=str(best_ind.expression_b))
 
+        print(f" gen{i} - fitness/expression: {best_ind.fitness:.4f}/{best_ind.expression_r}")
         print(f" gen{i} - fitness/expression: {best_ind.fitness:.4f}/{best_ind.expression_r}")
 
