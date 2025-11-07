@@ -5,14 +5,19 @@ from sympy.utilities.lambdify import lambdify
 import matplotlib.pyplot as plt
 
 #genetic bb
-x, y = sympy.symbols('x y')
+x, y, r, theta = sympy.symbols('x y r theta')
 
 #leaves of the expression tree
-TERMINALS = [x, y, sympy.Integer(1), sympy.Integer(2), sympy.Integer(3)]
+TERMINALS = [x, y, r, theta, sympy.Integer(1), sympy.Integer(2)]
 
 
 def safe_log(a):
     return sympy.log(sympy.Max(a, 1e-6))
+
+def safe_mod(a, b):
+    epsilon = 1e-6
+    safe_b = sympy.Max(sympy.Abs(b), epsilon)
+    return a % safe_b
 
 #branches of the expression tree
 OPERATORS = [
@@ -21,17 +26,24 @@ OPERATORS = [
     (sympy.sin, 1),
     (sympy.cos, 1),
     (sympy.exp, 1),
-    (safe_log, 1), 
+    (safe_log, 1),
+    (sympy.tanh, 1),  
+    (sympy.Abs, 1),   
+    (safe_mod, 2),    
 ]
 
 class Individual:
-    def __init__(self, max_depth=4, expression=None):
+    def __init__(self, max_depth=4, expr_r=None, expr_g=None, expr_b=None):
         self.max_depth = max_depth
-        if expression is None:
-            self.expression = self.mk_rand_exp(depth=0)
-        else:
-            self.expression = expression
-        self.func = self.compile_fn()
+      
+        self.expression_r = expr_r if expr_r else self.mk_rand_exp(depth=0)
+        self.expression_g = expr_g if expr_g else self.mk_rand_exp(depth=0)
+        self.expression_b = expr_b if expr_b else self.mk_rand_exp(depth=0)
+
+        self.func_r = self.compile_fn(self.expression_r)
+        self.func_g = self.compile_fn(self.expression_g)
+        self.func_b = self.compile_fn(self.expression_b)
+
         self.fitness = 0
         
     def mk_rand_exp(self, depth): # make random expression
@@ -45,37 +57,45 @@ class Individual:
         else: # 0.3 to pick terminal/stop growing
             return random.choice(TERMINALS)
 
-    def compile_fn(self):
-       # print(f"Compiling expression: {self.expression}")
+    def compile_fn(self, expression_to_compile): 
         try:
-            return lambdify([x, y], self.expression, 'numpy')
+            return lambdify([x, y, r, theta], expression_to_compile, 'numpy') 
         except Exception as e:
-            print(f"Error compiling {self.expression}: {e}")
-            return lambdify([x, y], x, 'numpy')
-
+            return lambdify([x, y, r, theta], x, 'numpy')
+    
     def evaluate(self, grid_size=300):
-        lin = np.linspace(-5, 5, grid_size) #for eg
-        xx, yy = np.meshgrid(lin, lin)
-        with np.errstate(divide='ignore', invalid='ignore'): 
-            z_grid = self.func(xx, yy)
-        
-        if not isinstance(z_grid, np.ndarray) or z_grid.ndim == 0: #return only 2D array
-            z_grid = np.full_like(xx, z_grid, dtype=np.float64)
+      lin = np.linspace(-5, 5, grid_size)
+      xx, yy = np.meshgrid(lin, lin)
+      rr = np.sqrt(xx**2 + yy**2)
+      tt = np.arctan2(yy, xx)
 
-        if np.iscomplexobj(z_grid):
-            z_grid = np.real(z_grid) #only considers real part of complex
-            
-        z_grid = np.nan_to_num(z_grid, nan=0.0, posinf=0.0, neginf=0.0)
-        
-        # normalization
-        if z_grid.max() != z_grid.min():
-            z_grid = (z_grid - z_grid.min()) / (z_grid.max() - z_grid.min())
-        
-        return z_grid
+      with np.errstate(divide='ignore', invalid='ignore'):
+        z_r = self.func_r(xx, yy, rr, tt)
+        z_g = self.func_g(xx, yy, rr, tt)
+        z_b = self.func_b(xx, yy, rr, tt)
+
+        def process_channel(z):
+         if not isinstance(z, np.ndarray) or z.ndim == 0:
+            z = np.full_like(xx, z, dtype=np.float64)
+         if np.iscomplexobj(z):
+            z = np.real(z)
+         z = np.nan_to_num(z, nan=0.0, posinf=0.0, neginf=0.0)
+         if z.max() != z.min():
+            z = (z - z.min()) / (z.max() - z.min())
+         else:
+            z = np.zeros_like(z)
+         return z
+
+      r_channel = process_channel(z_r)
+      g_channel = process_channel(z_g)
+      b_channel = process_channel(z_b)
+
+      rgb_image = np.stack([r_channel, g_channel, b_channel], axis=-1)
+      return rgb_image
 
     def render_image(self, filename="output.png", grid_size=300):
-        z_grid = self.evaluate(grid_size)
-        plt.imsave(filename, z_grid, cmap='viridis', origin='lower')
+      rgb_image = self.evaluate(grid_size)
+      plt.imsave(filename, rgb_image, origin='lower')
 
 class Population: #evol loop
     def __init__(self, size=50, max_depth=5):
@@ -84,15 +104,34 @@ class Population: #evol loop
         self.generation = 0
         self.individuals = [Individual(max_depth) for _ in range(size)]
 
-    def calculate_fitness(self): #mean of sq gradients 
-        for ind in self.individuals:
-            z_grid = ind.evaluate(grid_size=100) 
-            g_x, g_y = np.gradient(z_grid)
+    def calculate_fitness(self):
+
+        epsilon = 1e-6 
         
-            ind.fitness = np.mean(g_x**2 + g_y**2)
+        for ind in self.individuals:
+            rgb_grid = ind.evaluate(grid_size=100)
+
+            r_channel = rgb_grid[..., 0]
+            g_channel = rgb_grid[..., 1]
+            b_channel = rgb_grid[..., 2]
             
-            if ind.fitness < 1e-5:
-                ind.fitness = 1e-5
+            total_fitness = 0
+
+            for channel in [r_channel, g_channel, b_channel]:
+                score_spread = np.std(channel)
+                
+                g_x, g_y = np.gradient(channel)
+                score_edges = np.mean(g_x**2 + g_y**2)
+            
+                balanced_score = (score_spread + epsilon) * (score_edges + epsilon)
+                total_fitness += balanced_score
+            
+            ind.fitness = total_fitness
+            
+            if ind.fitness < 1e-10: 
+                ind.fitness = 1e-10
+
+
 
     def select_parents(self):
         parents = []
@@ -103,38 +142,68 @@ class Population: #evol loop
             parents.append(winner)
         return parents[0], parents[1]
 
-    def crossover(self, parent1, parent2):
-
-        nodes1 = list(sympy.preorder_traversal(parent1.expression))
-        nodes2 = list(sympy.preorder_traversal(parent2.expression))
+    def _crossover_channel(self, expr1, expr2):
+        nodes1 = list(sympy.preorder_traversal(expr1))
+        nodes2 = list(sympy.preorder_traversal(expr2))
 
         if len(nodes1) > 1 and len(nodes2) > 1:
             crossover_point1 = random.choice(nodes1[1:])
             crossover_point2 = random.choice(nodes2[1:])
-
             try:
-                child_expr = parent1.expression.subs(crossover_point1, crossover_point2)
+         
+                return expr1.subs(crossover_point1, crossover_point2)
             except Exception:
-                child_expr = parent1.expression
-        else: #just x
-            child_expr = parent1.expression 
+                return expr1 
+        else:
+            return expr1 
 
-        return Individual(self.max_depth, expression=child_expr)
+    def crossover(self, parent1, parent2):
+
+        child_expr_r = self._crossover_channel(parent1.expression_r, parent2.expression_r)
+        child_expr_g = self._crossover_channel(parent1.expression_g, parent2.expression_g)
+        child_expr_b = self._crossover_channel(parent1.expression_b, parent2.expression_b)
+
+        return Individual(
+            self.max_depth, 
+            expr_r=child_expr_r, 
+            expr_g=child_expr_g, 
+            expr_b=child_expr_b
+        )
 
     def mutate(self, individual):
-        nodes = list(sympy.preorder_traversal(individual.expression))
+
+        channel = random.choice([1, 2, 3])
+        
+        if channel == 1:
+            expr_to_mutate = individual.expression_r
+        elif channel == 2:
+            expr_to_mutate = individual.expression_g
+        else:
+            expr_to_mutate = individual.expression_b
+
+
+        nodes = list(sympy.preorder_traversal(expr_to_mutate))
         if len(nodes) < 2:
-            return #too simple to mutate
+            return # Too simple
             
         node_to_mutate = random.choice(nodes[1:]) 
         new_subtree = individual.mk_rand_exp(depth=individual.max_depth - 1)
  
         try:
-            mutated_expr = individual.expression.subs(node_to_mutate, new_subtree)
+            mutated_expr = expr_to_mutate.subs(node_to_mutate, new_subtree)
         except Exception:
-            mutated_expr = individual.expression 
+            mutated_expr = expr_to_mutate 
 
-        individual.__init__(individual.max_depth, expression=mutated_expr)
+
+        if channel == 1:
+            individual.expression_r = mutated_expr
+            individual.func_r = individual.compile_fn(mutated_expr)
+        elif channel == 2:
+            individual.expression_g = mutated_expr
+            individual.func_g = individual.compile_fn(mutated_expr)
+        else:
+            individual.expression_b = mutated_expr
+            individual.func_b = individual.compile_fn(mutated_expr)
 
 
     def evolve(self):
@@ -177,5 +246,5 @@ if __name__ == "__main__":
         filename = f"results/generation_{str(i).zfill(3)}.png"
         best_ind.render_image(filename=filename, grid_size=500)
         
-        print(f" gen{i} - fitness/expression: {best_ind.fitness:.4f}/{best_ind.expression}")
+        print(f" gen{i} - fitness/expression: {best_ind.fitness:.4f}/{best_ind.expression_r}")
 
