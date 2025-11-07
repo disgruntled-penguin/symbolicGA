@@ -3,6 +3,8 @@ import numpy as np
 import sympy
 from sympy.utilities.lambdify import lambdify
 import matplotlib.pyplot as plt
+import textwrap
+import warnings
 
 #genetic bb
 x, y, r, theta = sympy.symbols('x y r theta')
@@ -19,6 +21,11 @@ def safe_mod(a, b):
     safe_b = sympy.Max(sympy.Abs(b), epsilon)
     return a % safe_b
 
+def safe_pow(a, b):
+    safe_a = sympy.Max(sympy.Abs(sympy.re(a)), 1e-6) 
+    safe_b = sympy.Max(sympy.Min(sympy.re(b), 5), -5) 
+    return sympy.Pow(safe_a, safe_b)
+
 #branches of the expression tree
 OPERATORS = [
     (sympy.Add, 2),
@@ -29,7 +36,12 @@ OPERATORS = [
     (safe_log, 1),
     (sympy.tanh, 1),  
     (sympy.Abs, 1),   
-    (safe_mod, 2),    
+    (safe_mod, 2), 
+    (sympy.atan2, 2), 
+    (safe_pow, 2),    
+    (sympy.sqrt, 1),  
+    #(sympy.re, 1),    
+    (sympy.im, 1),   
 ]
 
 class Individual:
@@ -93,9 +105,30 @@ class Individual:
       rgb_image = np.stack([r_channel, g_channel, b_channel], axis=-1)
       return rgb_image
 
-    def render_image(self, filename="output.png", grid_size=300):
-      rgb_image = self.evaluate(grid_size)
-      plt.imsave(filename, rgb_image, origin='lower')
+    def render_image(self, filename="output.png", grid_size=300, expr_r_str="", expr_g_str="", expr_b_str=""):
+        rgb_image = self.evaluate(grid_size)
+        fig, ax = plt.subplots(figsize=(10, 12)) 
+        ax.imshow(rgb_image, origin='lower')
+        ax.axis('off') 
+        wrapped_expr_r = textwrap.fill(expr_r_str, width=410)
+        wrapped_expr_g = textwrap.fill(expr_g_str, width=410)
+        wrapped_expr_b = textwrap.fill(expr_b_str, width=410)
+
+        expression_text = (
+            f"R: {wrapped_expr_r}\n"
+            f"G: {wrapped_expr_g}\n"
+            f"B: {wrapped_expr_b}"
+        )
+        ax.text(0.5, -0.01, expression_text,
+                verticalalignment='top', horizontalalignment='center',
+                transform=ax.transAxes,
+                fontsize=8,
+                bbox=dict(boxstyle='round,pad=0.01', fc='wheat', alpha=0.1, ec='k'), 
+                wrap=True)
+
+        plt.tight_layout
+        plt.savefig(filename, bbox_inches='tight', dpi=150, pad_inches=0) 
+        plt.close(fig) 
 
 class Population: #evol loop
     def __init__(self, size=50, max_depth=5):
@@ -234,17 +267,29 @@ class Population: #evol loop
 
 if __name__ == "__main__":
 
-    NUM_GENERATIONS = 10
+    NUM_GENERATIONS = 9
     POPULATION_SIZE = 50
     MAX_DEPTH = 6
 
     pop = Population(size=POPULATION_SIZE, max_depth=MAX_DEPTH)
+    
 
     for i in range(NUM_GENERATIONS):
-        pop.evolve()
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            pop.evolve()
         best_ind = pop.best_individual()
         filename = f"results/rgb_{best_ind.expression_r}.png"
-        best_ind.render_image(filename=filename, grid_size=500)
-        
+        try:
+            best_ind.render_image(
+                filename=filename, 
+                grid_size=500,
+                expr_r_str=str(best_ind.expression_r), #pass string expressions
+                expr_g_str=str(best_ind.expression_g),
+                expr_b_str=str(best_ind.expression_b)
+            )
+        except Exception as e:
+            print(e)
+
         print(f" gen{i} - fitness/expression: {best_ind.fitness:.4f}/{best_ind.expression_r}")
 
