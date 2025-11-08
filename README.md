@@ -1,4 +1,4 @@
-generative art by evolving and mutating basic mathematical functions. The fitness of the population is defined by the mathematical expressions which produce more visual complexity and/or patterns, calculated with the standard deviation and the mean of sq gradient of the scalar field: <br>
+generative art by evolving and mutating basic mathematical functions. The fitness of the population is defined by the mathematical expressions which produce more visual complexity and/or patterns, calculated with parameters of scalar field: <br>
 $$F_{channel}(Z) = (\sigma(Z) + \epsilon) \times (\mathbb{E}[\|\nabla Z\|^2] + \epsilon)$$
 
 <br>
